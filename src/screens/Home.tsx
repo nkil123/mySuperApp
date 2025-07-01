@@ -1,5 +1,13 @@
-import { Button, Image, Pressable, Text, View } from 'react-native';
-import React from 'react';
+import {
+  Animated,
+  Button,
+  Image,
+  PanResponder,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
+import React, { useRef } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/StackNavigator';
 // import { Ball } from '../components/Ball';
@@ -11,43 +19,32 @@ type HomeProps = NativeStackScreenProps<RootStackParamList, 'Home'>;
 const Home = ({ navigation }: HomeProps) => {
   const renderDeckCards = (deckCard: DeckDataType) => {
     return (
-      <View
-        style={{
-          borderWidth: 2,
-          justifyContent: 'center',
-          //   alignItems: 'center',
-        }}
-      >
-        <View
-          style={{
-            padding: 10,
-            alignItems: 'center',
-          }}
-        >
-          <Image src={deckCard.uri} height={300} width={'100%'} />
-        </View>
-        <View style={{ flex: 1, borderTopWidth: 2, paddingVertical: 10 }}>
-          <Text style={{ textAlign: 'center' }}>{deckCard.text}</Text>
-          <Pressable style={{ backgroundColor: 'green', paddingVertical: 10 }}>
-            <Text style={{ textAlign: 'center', fontSize: 12, lineHeight: 12 }}>
-              Tap here
-            </Text>
-          </Pressable>
-        </View>
+      <View>
+        <Image height={200} width={'100%'} src={deckCard.uri} />
+        <Text style={{ textAlign: 'center', paddingVertical: 10 }}>
+          {deckCard.text}
+        </Text>
+        <Pressable>
+          <Text
+            style={{ borderWidth: 2, paddingVertical: 20, textAlign: 'center' }}
+          >
+            {'Click here'}
+          </Text>
+        </Pressable>
       </View>
     );
   };
   return (
-    <View>
+    <View style={{ marginHorizontal: 20, marginVertical: 30 }}>
       <Text>Home</Text>
       {/* <Ball /> */}
       <Deck decks={DeckData} renderCard={renderDeckCards} />
-      <Button
+      {/* <Button
         title="Go to profile"
         onPress={() => {
           navigation.navigate('Profile', { userId: '123' });
         }}
-      />
+      /> */}
     </View>
   );
 };
