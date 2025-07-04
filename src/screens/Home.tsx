@@ -19,7 +19,7 @@ type HomeProps = NativeStackScreenProps<RootStackParamList, 'Home'>;
 const Home = ({ navigation }: HomeProps) => {
   const renderDeckCards = (deckCard: DeckDataType) => {
     return (
-      <View key={deckCard.id} style={{backgroundColor:'gray', borderWidth:1}}>
+      <View  style={{backgroundColor:'gray', borderWidth:1}}>
         <Image height={200} src={deckCard.uri} />
         <Text style={{ textAlign: 'center', paddingVertical: 10 }}>
           {deckCard.text}

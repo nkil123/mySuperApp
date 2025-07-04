@@ -91,7 +91,7 @@ const Deck = ({ decks, renderCard }: DeckProps) => {
           </Animated.View>
         );
       }
-      return <View style={styles.cardStyles}>{renderCard(item, i)}</View>;
+      return <Animated.View style={styles.cardStyles} key={i}>{renderCard(item, i)}</Animated.View>;
     }).reverse();
   };
   return <View >{renderDecks()}</View>;
