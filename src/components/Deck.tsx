@@ -4,6 +4,7 @@ import {
   GestureResponderEvent,
   PanResponder,
   PanResponderGestureState,
+  StyleSheet,
   View,
 } from 'react-native';
 import React, { useRef, useState } from 'react';
@@ -39,7 +40,7 @@ const Deck = ({ decks, renderCard }: DeckProps) => {
       },
     }),
   );
-  console.log('index--outside', index);
+
   const forceSwipe = (position: 'left' | 'right') => {
     console.log('forceSwipe', index);
     const x = position === 'left' ? -SCREEN_WIDTH : SCREEN_WIDTH;
@@ -82,7 +83,7 @@ const Deck = ({ decks, renderCard }: DeckProps) => {
       if (i === index) {
         return (
           <Animated.View
-            style={getCardAnimationStyle()}
+            style={[getCardAnimationStyle(), styles.cardStyles]}
             {...panResponder.panHandlers}
             key={i}
           >
@@ -90,10 +91,17 @@ const Deck = ({ decks, renderCard }: DeckProps) => {
           </Animated.View>
         );
       }
-      return renderCard(item, i);
-    });
+      return <View style={styles.cardStyles}>{renderCard(item, i)}</View>;
+    }).reverse();
   };
-  return <View>{renderDecks()}</View>;
+  return <View >{renderDecks()}</View>;
 };
+
+const styles = StyleSheet.create({
+  cardStyles:{
+    position:'absolute',
+    width:"100%"
+  }
+})
 
 export default Deck;
