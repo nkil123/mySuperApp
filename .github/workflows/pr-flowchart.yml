@@ -28,7 +28,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Full history so the base..head diff resolves.
           fetch-depth: 0
@@ -80,8 +80,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           track_progress: true
           use_sticky_comment: true
-          # No --model pin: use the action's default until a run goes green.
-          # These are appended to the tools tag mode already grants.
+          # Unpinned model: the action's default. These tools are appended to
+          # the ones tag mode already grants, not a replacement for them.
           # Headless runs deny anything that falls through to "ask", so a
           # command missing here is a hard stop, not a prompt. Cover the
           # read-only git recon Claude reaches for when a diff surprises it.
@@ -147,43 +147,12 @@ jobs:
             If the PR changes no runtime behaviour, skip the diagram entirely
             and reply with a single line saying so and why.
 
-      # Logs and artifacts both need auth to fetch, but check-run annotations
-      # are public. On failure, surface ONLY the terminal error fields from the
-      # transcript - never tool output or file contents - so the run can be
-      # diagnosed from the API. Remove once the workflow is green.
-      - name: Surface Claude error
-        if: failure()
-        run: |
-          python3 - <<'PY'
-          import json, os, pathlib
-          p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "claude-execution-output.json"
-          if not p.exists():
-              print("::error::no execution output at %s" % p)
-              raise SystemExit
-          try:
-              data = json.loads(p.read_text())
-          except Exception as exc:
-              print("::error::unparsable transcript: %r" % exc)
-              raise SystemExit
-          msgs = data if isinstance(data, list) else [data]
-          bits = []
-          for m in msgs:
-              if not isinstance(m, dict):
-                  continue
-              if m.get("type") == "result" or m.get("is_error"):
-                  for key in ("type", "subtype", "is_error", "num_turns", "error", "result"):
-                      if key in m:
-                          bits.append("%s=%s" % (key, m[key]))
-          out = " | ".join(bits)[:800] or "no result entry in transcript"
-          print("::error::" + " ".join(out.split()))
-          PY
-
       # Claude's full transcript lives only on the runner. Keep it as an
       # artifact so a failed run can be diagnosed without dumping tool
       # output (which can contain secrets) into the public job log.
       - name: Upload Claude execution log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: claude-execution-output
           path: ${{ runner.temp }}/claude-execution-output.json
