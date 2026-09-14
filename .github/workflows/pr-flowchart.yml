@@ -1,0 +1,160 @@
+name: PR Flowchart
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Least privilege: read the code, write one comment back to the PR.
+# actions:read is required by tag mode — it always grants itself the
+# mcp__github_ci__* tools, and without this the CI MCP server is skipped
+# while the tools stay granted, leaving Claude holding unbacked tools.
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+# A new push supersedes the in-flight run for the same PR.
+concurrency:
+  group: pr-flowchart-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  flowchart:
+    runs-on: ubuntu-latest
+    # Job level, not step level: a step's own `env:` is NOT in scope for that
+    # same step's `if:`, and the `secrets` context cannot be used in `if` at
+    # all. This is what makes the credential guard below evaluable.
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history so the base..head diff resolves.
+          fetch-depth: 0
+
+      # Prove the base ref and diff resolve BEFORE Claude runs, so a broken
+      # diff shows up here as a plain git error instead of surfacing as an
+      # opaque Claude failure. Also warms the ref Claude is told to use.
+      - name: Verify base diff resolves
+        run: |
+          set -x
+          git rev-parse --verify "origin/${{ github.event.pull_request.base.ref }}"
+          git diff --stat "origin/${{ github.event.pull_request.base.ref }}...HEAD"
+
+      # Fork PRs get no secrets, so skip rather than fail red on every one.
+      # Decided in shell, not in an `if:` expression: a step's own env is not
+      # in scope for its own `if:`, and expression-level env resolution proved
+      # unreliable here. A step output is unambiguously available to `if:`.
+      - name: Check credentials
+        id: creds
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "have=false" >> "$GITHUB_OUTPUT"
+          # A fork genuinely cannot see secrets - skipping is correct there.
+          if [ "$IS_FORK" = "true" ]; then
+            echo "::notice::Fork PR: secrets are unavailable, skipping flowchart."
+            exit 0
+          fi
+          # Same-repo PR: secrets SHOULD be visible, so absence is a real
+          # misconfiguration. Fail loudly rather than pass green having done
+          # nothing - a silent skip here reads as "no changes worth drawing".
+          echo "::error::No Claude credential visible. Set one as a repository secret: \
+          gh secret set CLAUDE_CODE_OAUTH_TOKEN (or ANTHROPIC_API_KEY). \
+          Note a secret piped from an unset shell variable is stored EMPTY - \
+          it will appear in 'gh secret list' but resolve to nothing here. \
+          Let gh prompt you instead of piping."
+          exit 1
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.creds.outputs.have == 'true'
+        with:
+          # Set whichever one you configured; the unset one resolves to empty.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          track_progress: true
+          use_sticky_comment: true
+          # Unpinned model: the action's default. These tools are appended to
+          # the ones tag mode already grants, not a replacement for them.
+          # Headless runs deny anything that falls through to "ask", so a
+          # command missing here is a hard stop, not a prompt. Cover the
+          # read-only git recon Claude reaches for when a diff surprises it.
+          claude_args: >-
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git fetch:*),Bash(git ls-files:*),Read,Glob,Grep,LS,TodoWrite"
+          prompt: |
+            You are documenting a pull request in this React Native app for a
+            reviewer who has not read the diff yet.
+
+            Base branch: ${{ github.event.pull_request.base.ref }}
+            Head SHA:    ${{ github.event.pull_request.head.sha }}
+
+            1. Read the diff:
+                 git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+               Open the changed files with Read when the diff alone is not
+               enough to follow the logic.
+
+            2. Work out the *runtime flow* the PR creates or changes - the
+               order things actually happen in: user gesture or event, the
+               state and props it moves through, the branches taken, the
+               navigation or render that results. Follow it across files.
+               Ignore formatting, renames, and dependency bumps.
+
+            3. Reply with exactly this structure and nothing else:
+
+            ## What this PR changes
+
+            One or two sentences, plain language, naming the flow.
+
+            ## Flow
+
+            ```mermaid
+            flowchart TD
+                A["User drags card"] --> B{"dx past threshold?"}
+                B -->|yes| C["forceSwipe"]
+                B -->|no| D["resetPosition"]
+
+                classDef added fill:#dcfce7,stroke:#16a34a,color:#14532d
+                classDef changed fill:#fef9c3,stroke:#ca8a04,color:#713f12
+                class C added
+                class D changed
+            ```
+
+            ## Notes
+
+            Up to three bullets: edge cases, a branch that is now unreachable,
+            state that persists across the flow. Omit the section if there is
+            nothing worth saying.
+
+            Rules for the diagram:
+            - `flowchart TD`, and every node label wrapped in double quotes -
+              unquoted parentheses and commas break GitHub's Mermaid renderer.
+            - Node ids are bare letters/words, never quoted.
+            - Diamonds `{"..."}` for branches, with every outgoing edge labelled.
+            - Tag nodes the PR adds with `class <id> added` and nodes whose
+              behaviour it alters with `class <id> changed`. Leave untouched
+              context nodes unstyled so the delta is obvious. Always include
+              both `classDef` lines, even if only one is used.
+            - Keep it under ~15 nodes. If the PR touches several unrelated
+              flows, draw one `subgraph` per flow inside the single diagram.
+            - Diagram the flow as it exists *after* the PR.
+
+            If the PR changes no runtime behaviour, skip the diagram entirely
+            and reply with a single line saying so and why.
+
+      # Claude's full transcript lives only on the runner. Keep it as an
+      # artifact so a failed run can be diagnosed without dumping tool
+      # output (which can contain secrets) into the public job log.
+      - name: Upload Claude execution log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: claude-execution-output
+          path: ${{ runner.temp }}/claude-execution-output.json
+          if-no-files-found: warn
+          retention-days: 7
