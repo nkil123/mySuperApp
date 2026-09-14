@@ -36,8 +36,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           track_progress: true
           use_sticky_comment: true
+          # No --model pin: use the action's default until a run goes green.
+          # These are appended to the tools tag mode already grants.
           claude_args: >-
-            --model claude-opus-5
             --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Read,Glob,Grep"
           prompt: |
             You are documenting a pull request in this React Native app for a
@@ -98,3 +99,15 @@ jobs:
 
             If the PR changes no runtime behaviour, skip the diagram entirely
             and reply with a single line saying so and why.
+
+      # Claude's full transcript lives only on the runner. Keep it as an
+      # artifact so a failed run can be diagnosed without dumping tool
+      # output (which can contain secrets) into the public job log.
+      - name: Upload Claude execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-execution-output
+          path: ${{ runner.temp }}/claude-execution-output.json
+          if-no-files-found: warn
+          retention-days: 7
