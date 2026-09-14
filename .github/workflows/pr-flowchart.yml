@@ -5,9 +5,13 @@ on:
     types: [opened, synchronize, reopened]
 
 # Least privilege: read the code, write one comment back to the PR.
+# actions:read is required by tag mode — it always grants itself the
+# mcp__github_ci__* tools, and without this the CI MCP server is skipped
+# while the tools stay granted, leaving Claude holding unbacked tools.
 permissions:
   contents: read
   pull-requests: write
+  actions: read
 
 # A new push supersedes the in-flight run for the same PR.
 concurrency:
@@ -22,6 +26,15 @@ jobs:
         with:
           # Full history so the base..head diff resolves.
           fetch-depth: 0
+
+      # Prove the base ref and diff resolve BEFORE Claude runs, so a broken
+      # diff shows up here as a plain git error instead of surfacing as an
+      # opaque Claude failure. Also warms the ref Claude is told to use.
+      - name: Verify base diff resolves
+        run: |
+          set -x
+          git rev-parse --verify "origin/${{ github.event.pull_request.base.ref }}"
+          git diff --stat "origin/${{ github.event.pull_request.base.ref }}...HEAD"
 
       # Fork PRs get no secrets, so skip rather than fail red on every one.
       - uses: anthropics/claude-code-action@v1
@@ -38,8 +51,11 @@ jobs:
           use_sticky_comment: true
           # No --model pin: use the action's default until a run goes green.
           # These are appended to the tools tag mode already grants.
+          # Headless runs deny anything that falls through to "ask", so a
+          # command missing here is a hard stop, not a prompt. Cover the
+          # read-only git recon Claude reaches for when a diff surprises it.
           claude_args: >-
-            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Read,Glob,Grep"
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git fetch:*),Bash(git ls-files:*),Read,Glob,Grep,LS"
           prompt: |
             You are documenting a pull request in this React Native app for a
             reviewer who has not read the diff yet.
