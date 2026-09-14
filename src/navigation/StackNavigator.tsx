@@ -9,6 +9,7 @@ export type RootStackParamList = {
   BottomTabNavigator: undefined;
   Home: undefined;
   Profile: { userId: string };
+  Browse: undefined;
   // `| undefined` so Profile can still navigate here with no card.
   Details: { card?: DeckDataType } | undefined;
 };
