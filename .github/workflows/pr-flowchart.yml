@@ -1,0 +1,93 @@
+name: PR Flowchart
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Least privilege: read the code, write one comment back to the PR.
+permissions:
+  contents: read
+  pull-requests: write
+
+# A new push supersedes the in-flight run for the same PR.
+concurrency:
+  group: pr-flowchart-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  flowchart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the base..head diff resolves.
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          track_progress: true
+          use_sticky_comment: true
+          claude_args: >-
+            --model claude-opus-5
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Read,Glob,Grep"
+          prompt: |
+            You are documenting a pull request in this React Native app for a
+            reviewer who has not read the diff yet.
+
+            Base branch: ${{ github.event.pull_request.base.ref }}
+            Head SHA:    ${{ github.event.pull_request.head.sha }}
+
+            1. Read the diff:
+                 git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+               Open the changed files with Read when the diff alone is not
+               enough to follow the logic.
+
+            2. Work out the *runtime flow* the PR creates or changes - the
+               order things actually happen in: user gesture or event, the
+               state and props it moves through, the branches taken, the
+               navigation or render that results. Follow it across files.
+               Ignore formatting, renames, and dependency bumps.
+
+            3. Reply with exactly this structure and nothing else:
+
+            ## What this PR changes
+
+            One or two sentences, plain language, naming the flow.
+
+            ## Flow
+
+            ```mermaid
+            flowchart TD
+                A["User drags card"] --> B{"dx past threshold?"}
+                B -->|yes| C["forceSwipe"]
+                B -->|no| D["resetPosition"]
+
+                classDef added fill:#dcfce7,stroke:#16a34a,color:#14532d
+                classDef changed fill:#fef9c3,stroke:#ca8a04,color:#713f12
+                class C added
+                class D changed
+            ```
+
+            ## Notes
+
+            Up to three bullets: edge cases, a branch that is now unreachable,
+            state that persists across the flow. Omit the section if there is
+            nothing worth saying.
+
+            Rules for the diagram:
+            - `flowchart TD`, and every node label wrapped in double quotes -
+              unquoted parentheses and commas break GitHub's Mermaid renderer.
+            - Node ids are bare letters/words, never quoted.
+            - Diamonds `{"..."}` for branches, with every outgoing edge labelled.
+            - Tag nodes the PR adds with `class <id> added` and nodes whose
+              behaviour it alters with `class <id> changed`. Leave untouched
+              context nodes unstyled so the delta is obvious. Always include
+              both `classDef` lines, even if only one is used.
+            - Keep it under ~15 nodes. If the PR touches several unrelated
+              flows, draw one `subgraph` per flow inside the single diagram.
+            - Diagram the flow as it exists *after* the PR.
+
+            If the PR changes no runtime behaviour, skip the diagram entirely
+            and reply with a single line saying so and why.
