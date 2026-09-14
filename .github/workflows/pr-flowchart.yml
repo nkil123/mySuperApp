@@ -48,14 +48,28 @@ jobs:
       # unreliable here. A step output is unambiguously available to `if:`.
       - name: Check credentials
         id: creds
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
             echo "have=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "have=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "api_key_present=$([ -n "$ANTHROPIC_API_KEY" ] && echo yes || echo no)"
-          echo "oauth_present=$([ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && echo yes || echo no)"
+          echo "have=false" >> "$GITHUB_OUTPUT"
+          # A fork genuinely cannot see secrets - skipping is correct there.
+          if [ "$IS_FORK" = "true" ]; then
+            echo "::notice::Fork PR: secrets are unavailable, skipping flowchart."
+            exit 0
+          fi
+          # Same-repo PR: secrets SHOULD be visible, so absence is a real
+          # misconfiguration. Fail loudly rather than pass green having done
+          # nothing - a silent skip here reads as "no changes worth drawing".
+          echo "::error::No Claude credential visible. Set one as a repository secret: \
+          gh secret set CLAUDE_CODE_OAUTH_TOKEN (or ANTHROPIC_API_KEY). \
+          Note a secret piped from an unset shell variable is stored EMPTY - \
+          it will appear in 'gh secret list' but resolve to nothing here. \
+          Let gh prompt you instead of piping."
+          exit 1
 
       - uses: anthropics/claude-code-action@v1
         if: steps.creds.outputs.have == 'true'
