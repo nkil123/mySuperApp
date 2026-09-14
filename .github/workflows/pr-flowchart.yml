@@ -55,7 +55,7 @@ jobs:
           # command missing here is a hard stop, not a prompt. Cover the
           # read-only git recon Claude reaches for when a diff surprises it.
           claude_args: >-
-            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git fetch:*),Bash(git ls-files:*),Read,Glob,Grep,LS"
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git merge-base:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git fetch:*),Bash(git ls-files:*),Read,Glob,Grep,LS,TodoWrite"
           prompt: |
             You are documenting a pull request in this React Native app for a
             reviewer who has not read the diff yet.
@@ -115,6 +115,37 @@ jobs:
 
             If the PR changes no runtime behaviour, skip the diagram entirely
             and reply with a single line saying so and why.
+
+      # Logs and artifacts both need auth to fetch, but check-run annotations
+      # are public. On failure, surface ONLY the terminal error fields from the
+      # transcript - never tool output or file contents - so the run can be
+      # diagnosed from the API. Remove once the workflow is green.
+      - name: Surface Claude error
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "claude-execution-output.json"
+          if not p.exists():
+              print("::error::no execution output at %s" % p)
+              raise SystemExit
+          try:
+              data = json.loads(p.read_text())
+          except Exception as exc:
+              print("::error::unparsable transcript: %r" % exc)
+              raise SystemExit
+          msgs = data if isinstance(data, list) else [data]
+          bits = []
+          for m in msgs:
+              if not isinstance(m, dict):
+                  continue
+              if m.get("type") == "result" or m.get("is_error"):
+                  for key in ("type", "subtype", "is_error", "num_turns", "error", "result"):
+                      if key in m:
+                          bits.append("%s=%s" % (key, m[key]))
+          out = " | ".join(bits)[:800] or "no result entry in transcript"
+          print("::error::" + " ".join(out.split()))
+          PY
 
       # Claude's full transcript lives only on the runner. Keep it as an
       # artifact so a failed run can be diagnosed without dumping tool
