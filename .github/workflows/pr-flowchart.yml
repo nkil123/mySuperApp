@@ -43,8 +43,22 @@ jobs:
           git diff --stat "origin/${{ github.event.pull_request.base.ref }}...HEAD"
 
       # Fork PRs get no secrets, so skip rather than fail red on every one.
+      # Decided in shell, not in an `if:` expression: a step's own env is not
+      # in scope for its own `if:`, and expression-level env resolution proved
+      # unreliable here. A step output is unambiguously available to `if:`.
+      - name: Check credentials
+        id: creds
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "api_key_present=$([ -n "$ANTHROPIC_API_KEY" ] && echo yes || echo no)"
+          echo "oauth_present=$([ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && echo yes || echo no)"
+
       - uses: anthropics/claude-code-action@v1
-        if: env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        if: steps.creds.outputs.have == 'true'
         with:
           # Set whichever one you configured; the unset one resolves to empty.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
