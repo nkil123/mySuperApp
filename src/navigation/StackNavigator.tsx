@@ -3,12 +3,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BottomTabNavigator from './BottomTabNavigator';
 import Details from '../screens/Details';
+import { DeckDataType } from '../mockData/DeckData';
 
 export type RootStackParamList = {
   BottomTabNavigator: undefined;
   Home: undefined;
   Profile: { userId: string };
-  Details: undefined;
+  // `| undefined` so Profile can still navigate here with no card.
+  Details: { card?: DeckDataType } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

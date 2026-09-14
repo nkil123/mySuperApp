@@ -7,9 +7,13 @@ import { DeckData, DeckDataType } from '../mockData/DeckData';
 
 type HomeProps = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-const Home = (_props: HomeProps) => {
+const Home = ({ navigation }: HomeProps) => {
   const [liked, setLiked] = useState<DeckDataType[]>([]);
   const [passed, setPassed] = useState<DeckDataType[]>([]);
+
+  const openDetails = (card: DeckDataType) => {
+    navigation.navigate('Details', { card });
+  };
 
   const renderDeckCards = (deckCard: DeckDataType) => {
     return (
@@ -18,7 +22,7 @@ const Home = (_props: HomeProps) => {
         <Text style={{ textAlign: 'center', paddingVertical: 10 }}>
           {deckCard.text}
         </Text>
-        <Pressable>
+        <Pressable onPress={() => openDetails(deckCard)}>
           <Text
             style={{ borderWidth: 2, paddingVertical: 20, textAlign: 'center' }}
           >
@@ -40,6 +44,7 @@ const Home = (_props: HomeProps) => {
         renderCard={renderDeckCards}
         onSwipeRight={deck => setLiked(prev => [...prev, deck])}
         onSwipeLeft={deck => setPassed(prev => [...prev, deck])}
+        onCardPress={openDetails}
       />
     </View>
   );

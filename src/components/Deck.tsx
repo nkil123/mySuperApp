@@ -17,13 +17,25 @@ export type DeckProps = {
   renderCard: (props: DeckDataType, index: number) => React.JSX.Element;
   onSwipeLeft?: (deck: DeckDataType) => void;
   onSwipeRight?: (deck: DeckDataType) => void;
+  onCardPress?: (deck: DeckDataType) => void;
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const SCREEN_THRESHOLD = 0.25 * SCREEN_WIDTH;
 
-const Deck = ({ decks, renderCard, onSwipeLeft, onSwipeRight }: DeckProps) => {
+// Movement under this reads as a tap, not a drag. PanResponder claims the
+// gesture on the first move, so without this a slightly imprecise tap is
+// swallowed and the card just springs back.
+const TAP_SLOP = 5;
+
+const Deck = ({
+  decks,
+  renderCard,
+  onSwipeLeft,
+  onSwipeRight,
+  onCardPress,
+}: DeckProps) => {
   const [index, setIndex] = useState(0);
   // panResponder is built once, so its callbacks close over the first render.
   // They read indexRef instead of index, which would always be stale.
@@ -37,7 +49,16 @@ const Deck = ({ decks, renderCard, onSwipeLeft, onSwipeRight }: DeckProps) => {
         event: GestureResponderEvent,
         gestureState: PanResponderGestureState,
       ) => {
-        if (gestureState.dx > SCREEN_THRESHOLD) {
+        if (
+          Math.abs(gestureState.dx) < TAP_SLOP &&
+          Math.abs(gestureState.dy) < TAP_SLOP
+        ) {
+          resetPosition();
+          const tapped = decks[indexRef.current];
+          if (tapped) {
+            onCardPress?.(tapped);
+          }
+        } else if (gestureState.dx > SCREEN_THRESHOLD) {
           forceSwipe('right');
         } else if (gestureState.dx < -SCREEN_THRESHOLD) {
           forceSwipe('left');
