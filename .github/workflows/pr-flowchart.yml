@@ -21,6 +21,12 @@ concurrency:
 jobs:
   flowchart:
     runs-on: ubuntu-latest
+    # Job level, not step level: a step's own `env:` is NOT in scope for that
+    # same step's `if:`, and the `secrets` context cannot be used in `if` at
+    # all. This is what makes the credential guard below evaluable.
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,9 +45,6 @@ jobs:
       # Fork PRs get no secrets, so skip rather than fail red on every one.
       - uses: anthropics/claude-code-action@v1
         if: env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != ''
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         with:
           # Set whichever one you configured; the unset one resolves to empty.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
